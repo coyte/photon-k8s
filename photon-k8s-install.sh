@@ -24,7 +24,7 @@
 set -e
 
 # Test env variables
-if [[ -z "${IPADDRESS}" ]]; then Exit
+if [[ -z "${IPADDRESS}" ]]; then Exit fi
 
 
 
