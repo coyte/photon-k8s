@@ -4,11 +4,11 @@
 # Run as root
 
 # Usage: bash <(curl -s https://raw.githubusercontent.com/coyte/photon-k8s/main/photon-k8s-install.sh <master/worker>
-
+# bash <(curl -s http://10.0.6.152/photon-k8s-install.sh
 
 
 # Script needs env to be set
-# $FQDN
+# $FQDN (resolvable via below DNS server)
 # $ROOTPASSWORD
 # $IPADDRESS (in CIDR notation 5.6.7.8/24)
 # $GATEWAY
@@ -17,6 +17,7 @@
 # $CLUSTERIPRANGE (=172.160.0.0/16)
 # $AUTHORIZEDKEYSSERVER (user@server)
 # $SSHPASS
+# $KUBE_VERSION=1.23.6
 
 # Source: http://kubernetes.io/docs/getting-started-guides/kubeadm
 
@@ -24,7 +25,7 @@ echo "---------------------------------Exit on error----------------------------
 # set -e
 
 echo "---------------------------------Test env variables-------------------------------------------------------------------------------"
-if [[ -z $ROOTPASSWORD || -z $IPADDRESS || -z $GATEWAY || -z $DNS || -z $SEARCHDOMAIN || -z $CLUSTERIPRANGE || -z $AUTHORIZEDKEYSSERVER || -z $SSHPASS ]]; then
+if [[ -z $ROOTPASSWORD || -z $IPADDRESS || -z $GATEWAY || -z $DNS || -z $SEARCHDOMAIN || -z $CLUSTERIPRANGE || -z $AUTHORIZEDKEYSSERVER || -z $SSHPASS || -z $FQDN ]]; then
   echo 'One or more variables are undefined'
   exit 1
 fi
@@ -49,9 +50,10 @@ echo "---------------------------------OS Tested ok-----------------------------
 echo "---------------------------------Setting network----------------------------------------------------------------------------------"
 # Set network
 rm /etc/systemd/network/*
-cat > /etc/systemd/network/static.network <<EOF
+cat > /etc/systemd/network/10-static-en.network <<EOF
 [Match]
 Name=eth0
+
 [Network]
 Address=$IPADDRESS
 Gateway=$GATEWAY
@@ -59,14 +61,26 @@ DNS=$DNS
 Domains=$SEARCHDOMAIN
 EOF
 
+chmod 644 /etc/systemd/network/10-static-en.network 
+
 echo "---------------------------------Restarting network-------------------------------------------------------------------------------"
 systemctl restart systemd-networkd
+systemctl restart systemd-resolved
 
-KUBE_VERSION=1.23.6
+echo "---------------------------------Setting hostname---------------------------------------------------------------------------------"
+hostnamectl set-hostname ${FQDN%%.*}
+cat > /etc/hosts <<EOF
+::1         ipv6-localhost ipv6-loopback
+127.0.0.1   localhost.localdomain
+127.0.0.1   localhost
+127.0.0.1   ${FQDN%%.*} ${FQDN}
+EOF
+
 
 echo "---------------------------------Configuring packages and environment-------------------------------------------------------------"
 tdnf update -yq
 tdnf install -yq binutils sshpass
+
 
 
 cat > ~/.vimrc <<EOF
@@ -122,7 +136,7 @@ kubeadm reset -f || true #reset cluster or unjoin nodes
 echo "---------------------------------Clean CNI config---------------------------------------------------------------------------------"
 rm -rf /etc/cni/net.d/*
 echo "---------------------------------crictl rm all------------------------------------------------------------------------------------"
-crictl rm --force $(crictl ps -a -q) || true #delete all container
+crictl rm --force --all #delete all container
 echo "---------------------------------remove docker------------------------------------------------------------------------------------"
 tdnf -yq remove docker 
 echo "---------------------------------remove containerd--------------------------------------------------------------------------------"
@@ -227,7 +241,7 @@ systemctl enable kubelet && systemctl start kubelet
 
 ### init k8s
 rm /root/.kube/config || true
-kubeadm init --kubernetes-version=${KUBE_VERSION} --ignore-preflight-errors=NumCPU --skip-token-print --pod-network-cidr $CLUSTERIPRANGE
+kubeadm init --kubernetes-version=${KUBE_VERSION} --ignore-preflight-errors=NumCPU --skip-token-print --pod-network-cidr=$CLUSTERIPRANGE --control-plane-endpoint=k8s-master.teekens.info
 
 mkdir -p ~/.kube
 sudo cp -i /etc/kubernetes/admin.conf ~/.kube/config
