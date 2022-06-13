@@ -20,11 +20,11 @@
 
 # Source: http://kubernetes.io/docs/getting-started-guides/kubeadm
 
-# Exit on error
+echo "Exit on error"
 set -e
 
-# Test env variables
-if [[ -z "${IPADDRESS}" ]]; then; Exit; fi
+echo "Test env variables"
+if [[ -z "${IPADDRESS}" ]]; then Exit; fi
 
 
 
