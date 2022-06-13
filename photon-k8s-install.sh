@@ -25,8 +25,9 @@ set -e
 
 echo "Test env variables"
 if [[ -z "${IPADDRESS}" ]]; then 
-echo "No IPADDRESS env var present"
-exit 1; fi
+  echo "No IPADDRESS env var present"
+  exit 1 
+fi
 
 
 
