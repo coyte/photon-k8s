@@ -8,6 +8,7 @@
 
 
 # Script needs env to be set
+# $FQDN
 # $ROOTPASSWORD
 # $IPADDRESS (in CIDR notation 5.6.7.8/24)
 # $GATEWAY
@@ -19,17 +20,17 @@
 
 # Source: http://kubernetes.io/docs/getting-started-guides/kubeadm
 
-echo "Exit on error"
+echo "---------------------------------Exit on error------------------------------------------------------------------------------------"
 # set -e
 
-echo "Test env variables"
+echo "---------------------------------Test env variables-------------------------------------------------------------------------------"
 if [[ -z $ROOTPASSWORD || -z $IPADDRESS || -z $GATEWAY || -z $DNS || -z $SEARCHDOMAIN || -z $CLUSTERIPRANGE || -z $AUTHORIZEDKEYSSERVER || -z $SSHPASS ]]; then
   echo 'One or more variables are undefined'
   exit 1
 fi
 
 
-echo "Test for correct OS & version"
+echo "---------------------------------Test for correct OS & version--------------------------------------------------------------------"
 source /etc/lsb-release
 if [ "$DISTRIB_RELEASE" != "4.0" ]; then
     echo "################################# "
@@ -41,14 +42,14 @@ if [ "$DISTRIB_RELEASE" != "4.0" ]; then
     echo "Better ABORT with Ctrl+C. Or press any key to continue the install"
     read
 fi
-echo "OS Tested ok"
+echo "---------------------------------OS Tested ok-------------------------------------------------------------------------------------"
 
 
 # SYSTEM prep
-echo "setting network"
+echo "---------------------------------Setting network----------------------------------------------------------------------------------"
 # Set network
 rm /etc/systemd/network/*
-cat <<EOF | tee /etc/systemd/network/static.network
+cat > /etc/systemd/network/static.network <<EOF
 [Match]
 Name=eth0
 [Network]
@@ -58,45 +59,49 @@ DNS=$DNS
 Domains=$SEARCHDOMAIN
 EOF
 
-echo "Done setting network, restarting network"
+echo "---------------------------------Restarting network-------------------------------------------------------------------------------"
 systemctl restart systemd-networkd
 
 KUBE_VERSION=1.23.6
 
-echo "Configuring packages and environment,Press enter to continue"
-### setup terminal
-tdnf update -y
-tdnf install -y  binutils sshpass
-rm ~/.vimrc
-rm ~/.bashrc
-echo 'set tabstop=2' > ~/.vimrc
-echo 'set shiftwidth=2' >> ~/.vimrc
-echo 'set expandtab' >> ~/.vimrc
-echo 'alias ll="ls -al"' >> ~/.bashrc
-echo 'source <(kubectl completion bash)' >> ~/.bashrc
-echo 'alias k=kubectl' >> ~/.bashrc
-echo 'alias c=clear' >> ~/.bashrc
-echo 'complete -F __start_kubectl k' >> ~/.bashrc
-sed -i '1s/^/force_color_prompt=yes\n/' ~/.bashrc
+echo "---------------------------------Configuring packages and environment-------------------------------------------------------------"
+tdnf update -yq
+tdnf install -yq binutils sshpass
 
-echo "source .bashrc"
+
+cat > ~/.vimrc <<EOF
+set tabstop=2
+set shiftwidth=2
+set expandtab
+EOF
+
+cat > ~/.bashrc <<EOF
+alias ll='ls -al'
+source <(kubectl completion bash)
+alias k=kubectl
+alias c=clear
+complete -F __start_kubectl k
+force_color_prompt=yes
+EOF
+
+echo "---------------------------------source .bashrc-----------------------------------------------------------------------------------"
 source ~/.bashrc
 
-echo "copy authorized keys"
+echo "---------------------------------copy authorized keys-----------------------------------------------------------------------------"
 # copy authrorized-keys
 sshpass -e scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $AUTHORIZEDKEYSSERVER:~/.ssh/authorized_keys ~/.ssh/
 chown root:root ~/.ssh/authorized_keys
 chmod 400 ~/.ssh/authorized_keys
-echo "Done copying authorized-keys, Press enter to continue"
+echo "Done copying authorized-keys"
 
 
-echo "Disable swap"
+echo "---------------------------------Disable swap-------------------------------------------------------------------------------------"
 ### disable linux swap and remove any existing swap partitions
 swapoff -a
 sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 
-#Add repo's
-tee /etc/yum.repos.d/kubernetes.repo<<EOF
+echo "---------------------------------Add repositories---------------------------------------------------------------------------------"
+cat > /etc/yum.repos.d/kubernetes.repo<<EOF
 [kubernetes]
 name=Kubernetes
 baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
@@ -106,37 +111,139 @@ repo_gpgcheck=1
 gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 EOF
 
-# Clear and recreate cache
-tdnf clean all 
-tdnf -y makecache
+echo "---------------------------------Clear and recreate cache-------------------------------------------------------------------------"
+tdnf clean all -q
+tdnf -yq makecache
 
 
-echo "Remove packages"
-echo "kubeadm reset"
+echo "---------------------------------Remove packages----------------------------------------------------------------------------------"
+echo "---------------------------------kubeadm reset------------------------------------------------------------------------------------"
 kubeadm reset -f || true #reset cluster or unjoin nodes
-echo "Clean CNI config"
+echo "---------------------------------Clean CNI config---------------------------------------------------------------------------------"
 rm -rf /etc/cni/net.d/*
-echo "crictl rm all"
+echo "---------------------------------crictl rm all------------------------------------------------------------------------------------"
 crictl rm --force $(crictl ps -a -q) || true #delete all container
-echo "remove docker"
-tdnf -y remove docker 
-echo "remove containerd"
-tdnf -y remove containerd
-echo "remove cri-o"
-tdnf -y remove cri-o
-echo "remove kubeadm" 
-tdnf -y remove kubeadm
-echo "remove kubernetes-cni"
-tdnf -y remove kubernetes-cni
-echo "crictl"
-tdnf -y remove crictl
-echo "remove postman"
-tdnf -y remove postman
-echo "remove sshpass"
-tdnf -y remove sshpass
+echo "---------------------------------remove docker------------------------------------------------------------------------------------"
+tdnf -yq remove docker 
+echo "---------------------------------remove containerd--------------------------------------------------------------------------------"
+tdnf -yq remove containerd
+echo "---------------------------------remove cri-o-------------------------------------------------------------------------------------"
+tdnf -yq remove cri-o
+echo "---------------------------------remove kubeadm-----------------------------------------------------------------------------------" 
+tdnf -yq remove kubeadm
+echo "---------------------------------remove kubernetes-cni----------------------------------------------------------------------------"
+tdnf -yq remove kubernetes-cni
+echo "---------------------------------remove crictl------------------------------------------------------------------------------------"
+tdnf -yq remove crictl
+echo "---------------------------------remove postman-----------------------------------------------------------------------------------"
+tdnf -yq remove postman
+echo "---------------------------------remove sshpass-----------------------------------------------------------------------------------"
+tdnf -yq remove sshpass
 
-apt-mark unhold kubelet kubeadm kubectl kubernetes-cni || true
-apt-get remove -y docker.io containerd kubelet kubeadm kubectl kubernetes-cni || true
-apt-get autoremove -y
+
+echo "---------------------------------installing podman--------------------------------------------------------------------------------"
+### install podman
+# to be done
+
+
+echo "---------------------------------installing containerd, kubelet, kubeadm, kubectl, kubernetes-cni---------------------------------"
+tdnf -yq install  containerd kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00 kubernetes-cni
+
+echo "---------------------------------containerd config---------------------------------------------------------------------------------"
+
+### containerd
+cat > /etc/modules-load.d/containerd.conf<<EOF
+overlay
+br_netfilter
+EOF
+modprobe overlay
+modprobe br_netfilter
+cat > /etc/sysctl.d/99-kubernetes-cri.conf<<EOF
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+
+sysctl --system
+mkdir -p /etc/containerd
+cat > /etc/containerd/config.toml <<EOF
+disabled_plugins = []
+imports = []
+oom_score = 0
+plugin_dir = ""
+required_plugins = []
+root = "/var/lib/containerd"
+state = "/run/containerd"
+version = 2
+
+[plugins]
+
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+      base_runtime_spec = ""
+      container_annotations = []
+      pod_annotations = []
+      privileged_without_host_devices = false
+      runtime_engine = ""
+      runtime_root = ""
+      runtime_type = "io.containerd.runc.v2"
+
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+        BinaryName = ""
+        CriuImagePath = ""
+        CriuPath = ""
+        CriuWorkPath = ""
+        IoGid = 0
+        IoUid = 0
+        NoNewKeyring = false
+        NoPivotRoot = false
+        Root = ""
+        ShimCgroup = ""
+        SystemdCgroup = true
+EOF
+
+echo "---------------------------------crictl config------------------------------------------------------------------------------------"
+### crictl uses containerd as default
+{
+cat > /etc/crictl.yaml<<EOF
+runtime-endpoint: unix:///run/containerd/containerd.sock
+EOF
+}
+
+echo "---------------------------------kubelet config-----------------------------------------------------------------------------------"
+### kubelet should use containerd
+{
+cat > /etc/default/kubelet<<EOF
+KUBELET_EXTRA_ARGS="--container-runtime remote --container-runtime-endpoint unix:///run/containerd/containerd.sock"
+EOF
+}
+
+### start services
 systemctl daemon-reload
+systemctl enable containerd
+systemctl restart containerd
+systemctl enable kubelet && systemctl start kubelet
 
+
+### init k8s
+rm /root/.kube/config || true
+kubeadm init --kubernetes-version=${KUBE_VERSION} --ignore-preflight-errors=NumCPU --skip-token-print --pod-network-cidr $CLUSTERIPRANGE
+
+mkdir -p ~/.kube
+sudo cp -i /etc/kubernetes/admin.conf ~/.kube/config
+
+### CNI
+#kubectl apply -f https://raw.githubusercontent.com/killer-sh/cks-course-environment/master/cluster-setup/calico.yaml
+
+
+# etcdctl
+ETCDCTL_VERSION=v3.5.1
+ETCDCTL_VERSION_FULL=etcd-${ETCDCTL_VERSION}-linux-amd64
+wget https://github.com/etcd-io/etcd/releases/download/${ETCDCTL_VERSION}/${ETCDCTL_VERSION_FULL}.tar.gz
+tar xzf ${ETCDCTL_VERSION_FULL}.tar.gz
+mv ${ETCDCTL_VERSION_FULL}/etcdctl /usr/bin/
+rm -rf ${ETCDCTL_VERSION_FULL} ${ETCDCTL_VERSION_FULL}.tar.gz
+
+echo
+echo "### COMMAND TO ADD A WORKER NODE ###"
+kubeadm token create --print-join-command --ttl 0
