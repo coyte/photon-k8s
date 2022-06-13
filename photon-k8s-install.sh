@@ -3,7 +3,9 @@
 # Needs master and worker VM 
 # Run as root
 
-# Usage: bash <(curl -s https://raw.githubusercontent.com/coyte/photon-k8s-install.sh <master/worker>
+# Usage: bash <(curl -s https://raw.githubusercontent.com/coyte/photon-k8s/main/photon-k8s-install.sh <master/worker>
+
+
 
 # Script needs env to be set
 # $ROOTPASSWORD
@@ -20,6 +22,10 @@
 
 # Exit on error
 set -e
+
+# Test env variables
+if [[ -z "${IPADDRESS}" ]]; then Exit
+
 
 
 source /etc/lsb-release
