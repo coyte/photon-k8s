@@ -24,7 +24,7 @@ echo "Exit on error"
 set -e
 
 echo "Test env variables"
-if [[ -z "${IPADDRESS}" ]]; then exit; fi
+if [[ -z "${IPADDRESS}" ]]; then exit 1; fi
 
 
 
