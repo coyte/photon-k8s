@@ -73,13 +73,13 @@ cat > /etc/hosts <<EOF
 ::1         ipv6-localhost ipv6-loopback
 127.0.0.1   localhost.localdomain
 127.0.0.1   localhost
-127.0.0.1   ${FQDN%%.*} ${FQDN}
+#127.0.0.1   ${FQDN%%.*} ${FQDN}
 EOF
 
 
 echo "---------------------------------Configuring packages and environment-------------------------------------------------------------"
 tdnf update -yq
-tdnf install -yq binutils sshpass
+tdnf install -yq sshpass
 
 
 
@@ -114,7 +114,7 @@ echo "---------------------------------Disable swap-----------------------------
 swapoff -a
 sed -i '/\sswap\s/ s/^\(.*\)$/#\1/g' /etc/fstab
 
-echo "---------------------------------Add repositories---------------------------------------------------------------------------------"
+#echo "---------------------------------Add repositories---------------------------------------------------------------------------------"
 cat > /etc/yum.repos.d/kubernetes.repo<<EOF
 [kubernetes]
 name=Kubernetes
@@ -130,27 +130,11 @@ tdnf clean all -q
 tdnf -yq makecache
 
 
-echo "---------------------------------Remove packages----------------------------------------------------------------------------------"
-echo "---------------------------------kubeadm reset------------------------------------------------------------------------------------"
-kubeadm reset -f || true #reset cluster or unjoin nodes
-echo "---------------------------------Clean CNI config---------------------------------------------------------------------------------"
-rm -rf /etc/cni/net.d/*
-echo "---------------------------------crictl rm all------------------------------------------------------------------------------------"
-crictl rm --force --all #delete all container
+
 echo "---------------------------------remove docker------------------------------------------------------------------------------------"
 tdnf -yq remove docker 
 echo "---------------------------------remove containerd--------------------------------------------------------------------------------"
 tdnf -yq remove containerd
-echo "---------------------------------remove cri-o-------------------------------------------------------------------------------------"
-tdnf -yq remove cri-o
-echo "---------------------------------remove kubeadm-----------------------------------------------------------------------------------" 
-tdnf -yq remove kubeadm
-echo "---------------------------------remove kubernetes-cni----------------------------------------------------------------------------"
-tdnf -yq remove kubernetes-cni
-echo "---------------------------------remove crictl------------------------------------------------------------------------------------"
-tdnf -yq remove crictl
-echo "---------------------------------remove postman-----------------------------------------------------------------------------------"
-tdnf -yq remove postman
 echo "---------------------------------remove sshpass-----------------------------------------------------------------------------------"
 tdnf -yq remove sshpass
 
@@ -161,7 +145,7 @@ echo "---------------------------------installing podman------------------------
 
 
 echo "---------------------------------installing containerd, kubelet, kubeadm, kubectl, kubernetes-cni---------------------------------"
-tdnf -yq install  containerd kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00 kubernetes-cni
+tdnf -yq install  containerd  kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00 
 
 echo "---------------------------------containerd config---------------------------------------------------------------------------------"
 
@@ -218,19 +202,17 @@ EOF
 
 echo "---------------------------------crictl config------------------------------------------------------------------------------------"
 ### crictl uses containerd as default
-{
 cat > /etc/crictl.yaml<<EOF
 runtime-endpoint: unix:///run/containerd/containerd.sock
 EOF
-}
+
 
 echo "---------------------------------kubelet config-----------------------------------------------------------------------------------"
 ### kubelet should use containerd
-{
-cat > /etc/default/kubelet<<EOF
+cat > /etc/sysconfig/kubelet<<EOF
 KUBELET_EXTRA_ARGS="--container-runtime remote --container-runtime-endpoint unix:///run/containerd/containerd.sock"
 EOF
-}
+
 
 ### start services
 systemctl daemon-reload
